@@ -28,9 +28,9 @@ class FCDecoder(nn.Module):
         super().__init__()
 
         self.latent_dim = latent_dim
-        self.fc1 = nn.Linear(self.latent_dim, 256)
-        self.fc2 = nn.Linear(256, 512)
-        self.fc3 = nn.Linear(512, 784)
+        self.fc1 = nn.Linear(self.latent_dim, 128)
+        self.fc2 = nn.Linear(128, 256)
+        self.fc3 = nn.Linear(256, 784)
         self.silu = nn.SiLU()
 
     def forward(self, x: torch.Tensor):
@@ -66,10 +66,10 @@ class VariationalEncoder(nn.Module):
 
         super().__init__()
 
-        self.fc1 = nn.Linear(784, 512)
-        self.fc2 = nn.Linear(512, 256)
-        self.fc_mean = nn.Linear(256, latent_dims)
-        self.fc_var = nn.Linear(256, latent_dims)
+        self.fc1 = nn.Linear(784, 256)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc_mean = nn.Linear(128, latent_dims)
+        self.fc_var = nn.Linear(128, latent_dims)
         self.silu = nn.SiLU()
 
     def forward(self, x):

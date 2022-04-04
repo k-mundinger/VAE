@@ -94,8 +94,11 @@ class MNISTAutoencoder(pl.LightningModule):
             plt.savefig(save_path)
             plt.close()
 
+            del gen_imgs
+
             # generate visulaization of latent space
             encodings = np.zeros((1, 20))
+            labels = np.zeros(1)
 
 
             for batch_imgs, batch_lbls in loader:
@@ -107,22 +110,53 @@ class MNISTAutoencoder(pl.LightningModule):
                 reparametrized = mu + sigma*z
                 encoded = reparametrized.detach().cpu().numpy()
                 encodings = np.concatenate((encodings, encoded))
+                labels = np.concatenate((labels, batch_lbls.numpy()))
 
             encodings = encodings[1:, :]
-      
+            labels = labels[1:]
 
             fig, axs = plt.subplots(4, 5, figsize = (20, 16))
 
             fig.suptitle(f"Epoch: {self.current_epoch}, Marginals of latent space distribution")
 
             for i, ax in enumerate(axs.flat):
-                ax.hist(encodings[:, i], alpha = .8, bins = 80, color = "#34B3B6")
+                ax.hist(encodings[:, i], alpha = .8, bins = 60, color = "#34B3B6")
                 ax.set_title(f"Component {i}", size = "x-small")
 
             save_path = Path("/home/konrad/fun/VAE/data/imgs/").joinpath(self.run_name, "marginals_" + str(self.current_epoch) + ".png")
 
             plt.savefig(save_path)
             plt.close()
+
+            per_class_encodings = {k: encodings[np.where(labels == k)[0]] for k in range(10)}
+
+            fig, axs = plt.subplots(4, 5, figsize = (20, 16))
+
+            spacing = np.linspace(0, 1, 10)
+
+            fig.suptitle(f"Epoch: {self.current_epoch}, Marginals of latent space per class")
+
+            for i, ax in enumerate(axs.flat):
+
+                for k, v in per_class_encodings.items():
+
+                    ax.hist(v[:, i], alpha = .3, bins = 40, label = k, color = plt.cm.nipy_spectral(spacing[k]))
+                
+                ax.set_title(f"Component {i}", size = "x-small")
+
+
+            handles, lbls = ax.get_legend_handles_labels()
+
+            fig.legend(handles, lbls, loc = "right", fontsize = "xx-large")
+
+            save_path = Path("/home/konrad/fun/VAE/data/imgs/").joinpath(self.run_name, "per_class_" + str(self.current_epoch) + ".png")
+
+            plt.savefig(save_path)
+            plt.close()
+
+            del labels
+            del encodings
+            del per_class_encodings
 
 
     def train_dataloader(self):
