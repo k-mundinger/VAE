@@ -60,57 +60,49 @@ class Autoencoder(nn.Module):
 
 
 
+class VariationalEncoder(nn.Module):
+
+    def __init__(self, latent_dims):
+
+        super().__init__()
+
+        self.fc1 = nn.Linear(784, 512)
+        self.fc2 = nn.Linear(512, 256)
+        self.fc_mean = nn.Linear(256, latent_dims)
+        self.fc_var = nn.Linear(256, latent_dims)
+        self.silu = nn.SiLU()
+
+    def forward(self, x):
+
+        out = torch.flatten(x, start_dim=1)
+        out = self.silu(self.fc1(out))
+        out = self.silu(self.fc2(out))
+
+        mu =  self.fc_mean(out)
+
+        sigma = torch.exp(self.fc_var(out))
+
+        return mu, sigma
         
 
-def build_encoder_block(in_ch, out_ch):
+class VAE(nn.Module):
 
-    conv = nn.Conv2d(in_ch,
-                     out_ch,
-                     kernel_size=3,
-                     padding="same",
-                     bias=False)
+    def __init__(self, latent_dim):
 
-    conv2 = nn.Conv2d(out_ch,
-                     out_ch,
-                     kernel_size=3,
-                     padding="same",
-                     bias=False)
+        super().__init__()
 
-    return nn.Sequential(conv, 
-                         nn.SiLU(inplace = True),
-                         conv2,
-                         nn.SiLU(inplace = True))
+        self.encoder = VariationalEncoder(latent_dim)
+        self.decoder = FCDecoder(latent_dim)
+        self.kl_loss = 0
 
+    def forward(self, x:torch.Tensor):
 
-def build_decoder_block(in_ch, out_ch):
+        mu, sigma = self.encoder(x)
 
-    deconv = nn.ConvTranspose2d(in_ch,
-                                out_ch,
-                                2,
-                                2)
+        self.kl_loss = (-0.5*(1+torch.log(sigma) - mu**2- sigma).sum(dim = 1)).mean(dim =0)
 
-    conv = nn.Conv2d(out_ch,
-                     out_ch,
-                     kernel_size=3,
-                     padding="same",
-                     bias=False)
-
-    depth_conv = nn.Conv2d(out_ch,
-                           out_ch,
-                           kernel_size=1,
-                           padding="same",
-                           bias=False)
-
-    conv2 = nn.Conv2d(out_ch,
-                     out_ch,
-                     kernel_size=3,
-                     padding="same",
-                     bias=True)
-
-    return nn.Sequential(deconv, 
-                         nn.SiLU(inplace = True),
-                         conv,
-                         nn.SiLU(inplace = True),
-                         depth_conv,
-                         nn.SiLU(inplace = True),
-                         conv2)
+        z = torch.randn(size = (mu.size(0),mu.size(1)))
+        z= z.type_as(mu) 
+        reparametrized = mu + sigma*z
+        
+        return self.decoder(reparametrized)
