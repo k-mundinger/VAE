@@ -1,5 +1,6 @@
 from dataset import MNISTDataset
 from models import Autoencoder, VAE
+from torchvision import transforms
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
@@ -14,11 +15,14 @@ import matplotlib.pyplot as plt
 
 class MNISTAutoencoder(pl.LightningModule):
 
-    def __init__(self, latent_dim = 100, lr = .001, run_name = "test_run"):
+    def __init__(self, latent_dim = 100, lr = .001, run_name = "test_run", shape = 28, ch = 1):
 
         super().__init__()
 
-        self.dataset = MNISTDataset()
+        #self.dataset = MNISTDataset()
+        self.transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean = (.5, .5, .5), std = (.5, .5, .5))])
+        self.dataset = torchvision.datasets.CIFAR10("../data", download = False, train = True, transform = self.transform)
+        self.val_dataset = torchvision.datasets.CIFAR10("../data", download = False, train = False, transform = self.transform)
         self.lr = lr
         #self.model_type = model_type
         # if self.model_type == "conv":
@@ -27,7 +31,7 @@ class MNISTAutoencoder(pl.LightningModule):
         #     self.generator = FCGenerator(depth = 4, latent_dim = latent_dim, img_size=28)
         # else:
         #     raise NotImplementedError
-        self.model = Autoencoder(latent_dim)
+        self.model = Autoencoder(latent_dim, shape, ch)
 
         self.run_name = run_name
         self.l2loss = torch.nn.MSELoss()
@@ -40,6 +44,18 @@ class MNISTAutoencoder(pl.LightningModule):
 
 
     def training_step(self, batch, batch_idx):
+
+        imgs, _ = batch
+
+        reconstructed = self.model(imgs)
+
+        loss = self.l2loss(imgs, reconstructed)
+
+        self.log("L2-loss", loss)
+
+        return loss
+
+    def validation_step(self, batch, batch_idx):
 
         imgs, _ = batch
 
@@ -154,6 +170,10 @@ class MNISTAutoencoder(pl.LightningModule):
             plt.savefig(save_path)
             plt.close()
 
+            del handles
+            del lbls
+            del fig
+            del axs
             del labels
             del encodings
             del per_class_encodings
@@ -163,19 +183,22 @@ class MNISTAutoencoder(pl.LightningModule):
         return torch.utils.data.DataLoader(self.dataset, batch_size = 256)
 
     def val_dataloader(self):
-        return torch.utils.data.DataLoader(self.dataset, batch_size = 256)
+        return torch.utils.data.DataLoader(self.val_dataset, batch_size = 256)
 
 
 
 class MNISTVAE(MNISTAutoencoder):
 
-    def __init__(self, latent_dim = 100, lr = .001, run_name = "test_run"):
+    def __init__(self, latent_dim = 100, lr = .001, run_name = "test_run", shape: int = 28, ch: int = 1):
 
         super().__init__()
 
-        self.dataset = MNISTDataset()
+        #self.dataset = MNISTDataset()
+        self.transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean = (.5, .5, .5), std = (.5, .5, .5))])
+        self.dataset = torchvision.datasets.CIFAR10("../data", download = False, train = True, transform = self.transform)
+        self.val_dataset = torchvision.datasets.CIFAR10("../data", download = False, train = False, transform = self.transform)
 
-        self.model = VAE(latent_dim)
+        self.model = VAE(latent_dim, shape, ch)
 
         self.run_name = run_name
         self.lr = lr
@@ -190,7 +213,7 @@ class MNISTVAE(MNISTAutoencoder):
 
         l2_loss = self.l2loss(imgs, reconstructed)
 
-        if self.current_epoch > 10:
+        if 10 < self.current_epoch < 30:
 
             kl_div = self.model.kl_loss
 
@@ -203,4 +226,18 @@ class MNISTVAE(MNISTAutoencoder):
         loss = l2_loss + .008* kl_div
 
         return loss
+
+    def validation_step(self, batch, batch_idx):
+
+        imgs, _ = batch
+
+        reconstructed = self.model(imgs)
+
+        l2_loss = self.l2loss(imgs, reconstructed)
+
+        kl_div = self.model.kl_loss
+
+        self.log("Val: L2-loss", l2_loss)
+        self.log("Val: KL_divergence", kl_div)
+
 

@@ -3,12 +3,15 @@ import torch
 
 class FCEncoder(nn.Module):
 
-    def __init__(self, latent_dim: int):
+    def __init__(self, latent_dim: int, shape: int, ch: int):
 
         super().__init__()
 
+        self.shape = shape
+        self.ch = ch
+
         self.latent_dim = latent_dim
-        self.fc1 = nn.Linear(784, 512)
+        self.fc1 = nn.Linear(self.ch * self.shape**2, 512)
         self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, self.latent_dim)
         self.silu = nn.SiLU()
@@ -23,14 +26,17 @@ class FCEncoder(nn.Module):
 
 class FCDecoder(nn.Module):
 
-    def __init__(self, latent_dim: int):
+    def __init__(self, latent_dim: int, shape: int, ch: int):
 
         super().__init__()
+
+        self.shape = shape
+        self.ch = ch
 
         self.latent_dim = latent_dim
         self.fc1 = nn.Linear(self.latent_dim, 128)
         self.fc2 = nn.Linear(128, 256)
-        self.fc3 = nn.Linear(256, 784)
+        self.fc3 = nn.Linear(256, self.ch * self.shape**2)
         self.silu = nn.SiLU()
 
     def forward(self, x: torch.Tensor):
@@ -41,16 +47,16 @@ class FCDecoder(nn.Module):
         out = self.silu(self.fc2(out))
         out = nn.Tanh()(self.fc3(out))
 
-        return out.reshape(b, 1, 28, 28)
+        return out.reshape(b, self.ch, self.shape, self.shape)
         
 class Autoencoder(nn.Module):
 
-    def __init__(self, latent_dim):
+    def __init__(self, latent_dim, shape, ch):
 
         super().__init__()
 
-        self.encoder = FCEncoder(latent_dim)
-        self.decoder = FCDecoder(latent_dim)
+        self.encoder = FCEncoder(latent_dim, shape, ch)
+        self.decoder = FCDecoder(latent_dim, shape, ch)
 
     def forward(self, x:torch.Tensor):
 
@@ -62,14 +68,17 @@ class Autoencoder(nn.Module):
 
 class VariationalEncoder(nn.Module):
 
-    def __init__(self, latent_dims):
+    def __init__(self, latent_dim: int, shape: int, ch: int):
 
         super().__init__()
 
-        self.fc1 = nn.Linear(784, 256)
+        self.shape = shape
+        self.ch = ch
+
+        self.fc1 = nn.Linear(self.ch * self.shape**2, 256)
         self.fc2 = nn.Linear(256, 128)
-        self.fc_mean = nn.Linear(128, latent_dims)
-        self.fc_var = nn.Linear(128, latent_dims)
+        self.fc_mean = nn.Linear(128, latent_dim)
+        self.fc_var = nn.Linear(128, latent_dim)
         self.silu = nn.SiLU()
 
     def forward(self, x):
@@ -87,12 +96,12 @@ class VariationalEncoder(nn.Module):
 
 class VAE(nn.Module):
 
-    def __init__(self, latent_dim):
+    def __init__(self, latent_dim: int, shape: int, ch: int):
 
         super().__init__()
 
-        self.encoder = VariationalEncoder(latent_dim)
-        self.decoder = FCDecoder(latent_dim)
+        self.encoder = VariationalEncoder(latent_dim, shape, ch)
+        self.decoder = FCDecoder(latent_dim, shape, ch)
         self.kl_loss = 0
 
     def forward(self, x:torch.Tensor):
@@ -106,3 +115,31 @@ class VAE(nn.Module):
         reparametrized = mu + sigma*z
         
         return self.decoder(reparametrized)
+
+
+class VariationalConvEncoder(nn.Module):
+
+    def __init__(self, latent_dim: int = 20, shape: int = 28, ch: int = 1):
+
+        super().__init__()
+
+        self.shape = shape
+        self.ch = ch
+
+        self.fc1 = nn.Linear(self.ch * self.shape**2, 256)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc_mean = nn.Linear(128, latent_dim)
+        self.fc_var = nn.Linear(128, latent_dim)
+        self.silu = nn.SiLU()
+
+    def forward(self, x):
+
+        out = torch.flatten(x, start_dim=1)
+        out = self.silu(self.fc1(out))
+        out = self.silu(self.fc2(out))
+
+        mu =  self.fc_mean(out)
+
+        sigma = torch.exp(self.fc_var(out))
+
+        return mu, sigma
